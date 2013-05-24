@@ -1,0 +1,220 @@
+#!/usr/bin/python
+#
+#	autosubisu
+#	
+#
+#   A python script to detect internet connectivity and if not available
+#   tries to reconnect to Subisu Cable Net, Nepal by going to the login
+#   page automatically. Its recommended that you run this script as an hourly
+#   cron job. Do not run as root. use -h option for usage options
+#
+#   Requires python requests library. Get it via easy_install or pip
+
+import requests
+import datetime
+import subprocess
+from random import choice
+from HTMLParser import HTMLParser
+import sys
+import getopt
+
+logfilename = ""
+
+hosts = [ 
+	"google.com",
+	"example.com",
+	"example1.com",
+	"example2.com",
+	"example3.com",
+	"example4.com",
+	"example5.com",
+	"example6.com",
+	"example7.com",
+	"example8.com",
+	"example9.com",
+	"8.8.8.8",
+	"8.8.4.4",
+	"208.67.222.222",
+	"208.67.220.220"
+]
+
+useragents = [
+	"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_8_3) AppleWebKit/536.29.13 (KHTML, like Gecko) Version/6.0.4 Safari/536.29.13",
+	"Mozilla/5.0 (Macintosh; Intel Mac OS X 10.8; rv:20.0) Gecko/20100101 Firefox/20.0",
+	"Mozilla/5.0 (Windows NT 6.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/28.0.1468.0 Safari/537.36",
+	"Mozilla/5.0 (compatible; MSIE 10.0; Windows NT 6.1; WOW64; Trident/6.0)"
+]
+
+
+class RedirectGetter(HTMLParser):
+	url = ""
+	def handle_starttag(self, tag, attrs):
+		if tag == "meta":
+			equiv = ''
+			content = ''
+			for attr in attrs:
+				if attr[0] == u'http-equiv':
+					equiv = attr[1]
+				if attr[0] == u'content':
+					content = attr[1]
+			if equiv == u'Refresh':
+				url = content.split(";")
+				if len(url) > 1:
+					self.url = url[1][4:]
+				else:
+					self.url = url[0]
+				
+
+def log(line):
+	line = "{0} {1}".format(datetime.datetime.now(), line)
+	print line
+	if logfilename != '':
+		with open(logfilename, "a") as logfile:
+			logfile.write(line + "\n")
+
+
+def ping(hostname):
+	print "ping {0}".format(hostname)
+	
+	response = subprocess.Popen( 
+		["ping", "-c3", "-W1000", hostname], 
+		stdout=subprocess.PIPE, 
+		stderr=subprocess.PIPE 
+	)
+	
+	#data = response.communicate()[0]
+	response.wait()
+	
+	if response.returncode == 0:
+		return True
+
+	return False
+
+
+def reconnectSubisu(user, password):
+	log("Trying to connect Subisu")
+
+	#Acts like a random browser
+	headers = {
+		'User-Agent' : choice(useragents)
+	}
+
+	#Actual data sent to the server
+	data = {
+		'fromTemplate' : '1',
+		'password' : password,
+		'phone' : '0',
+		'type' : '1',
+		'username' : user
+	}
+
+	#This ensures that cookies persist
+	session = requests.Session()
+
+	try:
+		#The whole login process is a bit convoluted and involves
+		#several redirects, and two posts both occurring via JavaScript
+		print "1"
+		r = session.get(
+			"http://202.63.240.10/userportal/login.do",
+			headers=headers
+		)
+
+		redir = RedirectGetter()
+		redir.feed(r.text)
+
+		print "2"
+		r = session.get(
+			redir.url,
+			headers=headers
+		)
+
+		print "3"
+		r = session.post(
+			"http://202.63.240.10/userportal/login.do?requesturi=http%3A%2F%2F1.254.254.254%2F%3FN%3D1369277512358",
+			headers=headers
+		)
+		
+		print "4"
+		r = session.post(
+			'http://202.63.240.10/userportal/newlogin.do',
+			headers=headers, 
+			data=data
+		)
+
+		if "<b>Access Denied</b>" in r.text:
+			log("Subisu connection error: Access Denied")
+
+		if '<span style="FONT-WEIGHT: bold">Logout</span>' in r.text:
+			log("Subisu connection: Logged in")
+
+	except requests.exceptions.ConnectionError:
+		log("Subisu connection error: Cannot connect to login server")
+
+
+def testConnection(router, user, password):
+	if ping(choice(hosts)):
+		return
+
+	if ping(choice(hosts)):
+		return
+
+	log("No Internet connection")
+
+	if router != '':
+		if not ping(router):
+			log("No LAN connection")
+			return
+
+	reconnectSubisu(user=user, password=password)
+
+
+def usage():
+	print "Auto Reconnect Subisu"
+	print ""
+	print "Usage:"
+	print "    -h, --help"
+	print "       Displays this help"
+	print "    -u, --user"
+	print "       Username for internet connection"
+	print "    -p, --password"
+	print "       Password for internet connection"
+	print "    -r, --router"
+	print "       IP adress of the router in your LAN, If not set does"
+	print "       not check for LAN connectivity before trying to login"
+	print "    -l, --log"
+	print "       Log file"
+
+
+def main(argv):
+	global logfilename
+	user = ''
+	password = ''
+	router = ''
+
+	try:
+		opts, args = getopt.getopt(argv, "hu:p:r:l:", ["help", "user=","password=","router=","log="])
+	except getopt.GetoptError:
+		usage()
+		sys.exit(2)
+
+	for opt, arg in opts:
+		if opt in ("-h", "--help"):
+			usage()
+			sys.exit()
+		elif opt in ("-u", "--user"):
+			user = arg
+		elif opt in ("-p", "--password"):
+			password = arg
+		elif opt in ("-r", "--router"):
+			router = arg
+		elif opt in ("-l", "--log"):
+			logfilename = arg
+
+	print "Auto Reconnect Subisu"
+
+	testConnection(router, user, password)
+
+
+if __name__ == '__main__':
+	main(sys.argv[1:])
