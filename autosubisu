@@ -20,6 +20,7 @@ import getopt
 
 logfilename = ""
 
+#List of hosts that are randomly pinged to check for internet connectivity
 hosts = [ 
 	"google.com",
 	"example.com",
@@ -38,6 +39,7 @@ hosts = [
 	"208.67.220.220"
 ]
 
+#List of web browser useragent strings that we impersonate when loggin in
 useragents = [
 	"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_8_3) AppleWebKit/536.29.13 (KHTML, like Gecko) Version/6.0.4 Safari/536.29.13",
 	"Mozilla/5.0 (Macintosh; Intel Mac OS X 10.8; rv:20.0) Gecko/20100101 Firefox/20.0",
