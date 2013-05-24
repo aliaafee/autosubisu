@@ -6,7 +6,7 @@
 #   A python script to detect internet connectivity and if not available
 #   tries to reconnect to Subisu Cable Net, Nepal by going to the login
 #   page automatically. Its recommended that you run this script as an hourly
-#   cron job. Do not run as root. use -h option for usage options
+#   cron job. Do not run as root. use -h option for usage.
 #
 #   Requires python requests library. Get it via easy_install or pip
 
