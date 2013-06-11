@@ -106,7 +106,7 @@ def reconnectSubisu(user, password):
 		'fromTemplate' : '1',
 		'password' : password,
 		'phone' : '0',
-		'type' : '1',
+		'type' : '2',
 		'username' : user
 	}
 
@@ -115,13 +115,13 @@ def reconnectSubisu(user, password):
 
 	try:
 		#The whole login process is a bit convoluted and involves
-		#several redirects, and two posts both occurring via JavaScript
+		#several redirects, and two posts both occurring via JavaScript.
 		print "1"
 		r = session.get(
 			"http://202.63.240.10/userportal/login.do",
 			headers=headers
 		)
-
+		
 		redir = RedirectGetter()
 		redir.feed(r.text)
 
@@ -144,11 +144,13 @@ def reconnectSubisu(user, password):
 			data=data
 		)
 
-		if "<b>Access Denied</b>" in r.text:
-			log("Subisu connection error: Access Denied")
-
 		if '<span style="FONT-WEIGHT: bold">Logout</span>' in r.text:
 			log("Subisu connection: Logged in")
+		elif "<b>Access Denied</b>" in r.text:
+			log("Subisu connection error: Access Denied")
+		else:
+			log("Subisu connection error: Unrecognized response, you may not be logged in")
+			
 
 	except requests.exceptions.ConnectionError:
 		log("Subisu connection error: Cannot connect to login server")
@@ -212,6 +214,10 @@ def main(argv):
 			router = arg
 		elif opt in ("-l", "--log"):
 			logfilename = arg
+
+	if user ==  '' or password == '' or router == '':
+		usage()
+		sys.exit()
 
 	print "Auto Reconnect Subisu"
 
