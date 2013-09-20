@@ -15,6 +15,7 @@ import datetime
 import subprocess
 from random import choice
 from HTMLParser import HTMLParser
+import base64
 import sys
 import getopt
 
@@ -66,6 +67,24 @@ class RedirectGetter(HTMLParser):
 				else:
 					self.url = url[0]
 				
+
+class WanIpGetter(HTMLParser):
+	on = False
+	ip = ''
+	def handle_starttag(self, tag, attrs):
+		if tag == "wan_ip_address":
+			self.on = True
+
+	def handle_endtag(self, tag):
+		if tag == "wan_ip_address":
+			self.on = False
+	
+	def handle_data(self, data):
+		if self.on:
+			self.ip += data
+	
+			
+			
 
 def log(line):
 	line = "{0} {1}".format(datetime.datetime.now(), line)
@@ -156,22 +175,94 @@ def reconnectSubisu(user, password):
 		log("Subisu connection error: Cannot connect to login server")
 
 
-def testConnection(router, user, password):
-	if ping(choice(hosts)):
-		return
+def dlinkDhcpRenew(router, user, password):
+	"""
+	1- http://192.168.1.1/goform/formLogin.asp
+	2- http://192.168.1.1/Status/wan_button_action.asp?connect=false
+	3- http://192.168.1.1/Status/wan_button_action.asp?connect=true
+	4- http://192.168.1.1/Status/wan_connection_status.asp
+	"""
 
-	if ping(choice(hosts)):
-		return
+	#url prefix
+	prefix = "http://{0}".format(router)
 
-	log("No Internet connection")
+	#Acts like a random browser
+	headers = {
+		'User-Agent' : choice(useragents)
+	}
 
-	if router != '':
-		if not ping(router):
-			log("No LAN connection")
+	#Actual data sent to the server
+	data = {
+		'FILECODE' : '',
+		'VERIFICATION_CODE' : '',
+		'VER_CODE' : '',
+		'curTime' : '1379606943530',
+		'login_n' : user,
+		'login_name' : '',
+		'login_pass' : base64.b64encode(password)
+	}
+
+	#This ensures that cookies persist
+	session = requests.Session()
+
+	try:
+		r = session.post(
+			prefix + "/goform/formLogin",
+			headers=headers,
+			data=data
+		)
+
+		r = session.get(
+			prefix + "/Status/wan_button_action.asp?connect=false",
+			headers=headers
+		)
+
+		r = session.get(
+			prefix + "/Status/wan_button_action.asp?connect=true",
+			headers=headers
+		)
+
+		r = session.get(
+			prefix + "/Status/wan_connection_status.asp",
+			headers=headers
+		)
+
+		wanipgetter = WanIpGetter()
+		wanipgetter.feed(r.text)
+		wanip = wanipgetter.ip
+
+		log("Router wan DHCP Renewed {0}".format(wanip))
+
+	except requests.exceptions.ConnectionError:
+		log("Error Connecting to Dlink Router")
+
+
+def testConnection(user, password, router, routeruser, routerpassword):
+	count = 0
+	while count < 10:
+		if ping(choice(hosts)):
 			return
 
-	reconnectSubisu(user=user, password=password)
+		if ping(choice(hosts)):
+			return
 
+		log("No Internet connection")
+
+		if router != '':
+			if not ping(router):
+				log("No LAN connection")
+				return
+
+		if ping('202.63.240.10'):
+			reconnectSubisu(user=user, password=password)
+			return
+
+		log("No Connection to Subisu")
+		
+		dlinkDhcpRenew(router, routeruser, routerpassword)
+
+		count += 1
+		
 
 def usage():
 	print "Auto Reconnect Subisu"
@@ -184,8 +275,11 @@ def usage():
 	print "    -p, --password"
 	print "       Password for internet connection"
 	print "    -r, --router"
-	print "       IP adress of the router in your LAN, If not set does"
-	print "       not check for LAN connectivity before trying to login"
+	print "       IP adress of the router in your LAN"
+	print "    -v, --routeruser"
+	print "       Username for router"
+	print "    -q, --routerpassword"
+	print "       Password for router"
 	print "    -l, --log"
 	print "       Log file"
 
@@ -195,9 +289,13 @@ def main(argv):
 	user = ''
 	password = ''
 	router = ''
+	routeruser = ''
+	routerpassword = ''
 
 	try:
-		opts, args = getopt.getopt(argv, "hu:p:r:l:", ["help", "user=","password=","router=","log="])
+		opts, args = getopt.getopt(argv, 
+			"hu:p:r:v:q:l:", 
+			["help", "user=","password=","router=","routeruser=","routerpassword","log="])
 	except getopt.GetoptError:
 		usage()
 		sys.exit(2)
@@ -212,16 +310,20 @@ def main(argv):
 			password = arg
 		elif opt in ("-r", "--router"):
 			router = arg
+		elif opt in ("-v", "--routeruser"):
+			routeruser = arg
+		elif opt in ("-q", "--routerpassword"):
+			routerpassword = arg
 		elif opt in ("-l", "--log"):
 			logfilename = arg
 
-	if user ==  '' or password == '' or router == '':
+	if user ==  '' or password == '' or router == '' or routeruser == '' or routerpassword == '':
 		usage()
 		sys.exit()
 
 	print "Auto Reconnect Subisu"
 
-	testConnection(router, user, password)
+	testConnection(user, password, router, routeruser, routerpassword)
 
 
 if __name__ == '__main__':
