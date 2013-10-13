@@ -237,16 +237,17 @@ def dlinkDhcpRenew(router, user, password):
 		log("Error Connecting to Dlink Router")
 
 
-def testConnection(user, password, router, routeruser, routerpassword):
+def testConnection(user, password, router, routeruser, routerpassword, fast):
 	count = 0
 	while count < 10:
-		if ping(choice(hosts)):
-			return
+		if not fast:
+			if ping(choice(hosts)):
+				return
 
-		if ping(choice(hosts)):
-			return
+			if ping(choice(hosts)):
+				return
 
-		log("No Internet connection")
+			log("No Internet connection")
 
 		if router != '':
 			if not ping(router):
@@ -257,11 +258,14 @@ def testConnection(user, password, router, routeruser, routerpassword):
 			reconnectSubisu(user=user, password=password)
 			return
 
-		log("No Connection to Subisu")
-		
-		dlinkDhcpRenew(router, routeruser, routerpassword)
+		if router != '':
+			log("No Connection to Subisu")
+			
+			dlinkDhcpRenew(router, routeruser, routerpassword)
 
-		count += 1
+			count += 1
+		else:
+			log("No Connection to Subisu, Restart your router.")
 		
 
 def usage():
@@ -282,6 +286,8 @@ def usage():
 	print "       Password for router"
 	print "    -l, --log"
 	print "       Log file"
+	print "    -f, --fast"
+	print "       Skips pings and directly tries to connect"
 
 
 def main(argv):
@@ -291,11 +297,12 @@ def main(argv):
 	router = ''
 	routeruser = ''
 	routerpassword = ''
+	fast = False
 
 	try:
 		opts, args = getopt.getopt(argv, 
-			"hu:p:r:v:q:l:", 
-			["help", "user=","password=","router=","routeruser=","routerpassword","log="])
+			"hu:p:r:v:q:l:f", 
+			["help", "user=","password=","router=","routeruser=","routerpassword","log=","fast"])
 	except getopt.GetoptError:
 		usage()
 		sys.exit(2)
@@ -316,14 +323,16 @@ def main(argv):
 			routerpassword = arg
 		elif opt in ("-l", "--log"):
 			logfilename = arg
+		elif opt in ("-f", "--fast"):
+			fast = True
 
-	if user ==  '' or password == '' or router == '' or routeruser == '' or routerpassword == '':
+	if user ==  '' or password == '':
 		usage()
 		sys.exit()
 
 	print "Auto Reconnect Subisu"
 
-	testConnection(user, password, router, routeruser, routerpassword)
+	testConnection(user, password, router, routeruser, routerpassword, fast)
 
 
 if __name__ == '__main__':
